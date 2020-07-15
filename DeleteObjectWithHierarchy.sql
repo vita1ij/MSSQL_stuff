@@ -1,7 +1,6 @@
 
-declare @schema varchar(max) = 'dbo'
-declare @deleteFromTable varchar(max) = 'dcs_documents'
-declare @condition varchar(max) = 'ddoc_dfld_id = 1000023'
+declare @deleteFromTable varchar(max) = 'table_name'
+declare @condition varchar(max) = 'column_id = @id'
 declare @tbl int
 select @tbl = object_id from sys.tables where name = @deleteFromTable
 
@@ -76,7 +75,6 @@ as
 		convert(varchar(max),'delete ' + dependant_tbl + ' from ' + dependant_tbl + ' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail),
 		convert(varchar(max),' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail)
 	from delete_order
-	--join x_foreign_keys fk on base_tbl_id = obj
 	join x_foreign_joins_formatted on tbl= base_tbl
 	where dependant_tbl <> base_tbl
 )
