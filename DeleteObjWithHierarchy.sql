@@ -57,7 +57,7 @@ as
 		RIGHT(join_script, LEN(join_script)-4)
 	from x_foreign_joins
 )
-,delete_order(rn_parent, rn_txt, tbl, script, script_tail)
+,delete_order(rn_parent, rn_txt, tbl, script, script_tail, tbl_path)
 as
 (
 	select 
@@ -65,7 +65,8 @@ as
 		convert(varchar(max),'1'), 
 		@deleteFromTable,
 		convert(varchar(max),'delete ' + @deleteFromTable + ' where ' + @condition),
-		convert(varchar(max),' where ' + @condition)
+		convert(varchar(max),' where ' + @condition),
+		cast('|' as varchar(max)) + @deleteFromTable + '|'
 	union all
 
 	select 
@@ -73,10 +74,12 @@ as
 		rn_txt + '.' + convert(varchar(max),row_number() over(order by dependant_tbl)),
 		dependant_tbl,
 		convert(varchar(max),'delete ' + dependant_tbl + ' from ' + dependant_tbl + ' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail),
-		convert(varchar(max),' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail)
-	from delete_order
+		convert(varchar(max),' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail),
+		tbl_path + dependant_tbl + '|'
+	from delete_order do
 	join x_foreign_joins_formatted on tbl= base_tbl
 	where dependant_tbl <> base_tbl
+		and tbl_path not like ('%|' + base_tbl + '|' + dependant_tbl + '|%')
 )
 select * 
 from delete_order
