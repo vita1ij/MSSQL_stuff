@@ -1,4 +1,5 @@
 
+
 declare @deleteFromTable varchar(max) = 'table_name'
 declare @condition varchar(max) = 'column_id = @id'
 declare @tbl int
@@ -30,7 +31,7 @@ as
 		base_tbl,
 		dependant_tbl,
 		(select 
-			' or ' + base_column + '=' + dependant_column 
+			' or ###.' + base_column + '= $$$.' + dependant_column 
 		from 
 			x_foreign_keys y 
 		where 
@@ -62,7 +63,7 @@ as
 (
 	select 
 		convert(varchar(max),''), 
-		convert(varchar(max),'1'), 
+		convert(varchar(max),'t1'), 
 		@deleteFromTable,
 		convert(varchar(max),'delete ' + @deleteFromTable + ' where ' + @condition),
 		convert(varchar(max),' where ' + @condition),
@@ -71,10 +72,16 @@ as
 
 	select 
 		rn_txt,
-		rn_txt + '.' + convert(varchar(max),row_number() over(order by dependant_tbl)),
+		rn_txt + '_' + convert(varchar(max),row_number() over(order by dependant_tbl)),
 		dependant_tbl,
-		convert(varchar(max),'delete ' + dependant_tbl + ' from ' + dependant_tbl + ' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail),
-		convert(varchar(max),' join ' + base_tbl + ' ON ' + join_script + ' ' + script_tail),
+		convert(varchar(max),'delete ' + rn_txt + '_' + convert(varchar(max),row_number() over(order by dependant_tbl)) 
+			+ ' from ' + dependant_tbl + ' as ['+rn_txt + '_' + convert(varchar(max),row_number() over(order by dependant_tbl))+'] join ' 
+			+ base_tbl + ' as ['+rn_txt+'] ON ' 
+			+ REPLACE(REPLACE(join_script,'###',rn_txt),'$$$',rn_txt + '_' + convert(varchar(max),row_number() over(order by dependant_tbl))) + ' ' 
+			+ script_tail),
+		convert(varchar(max),' join ' + base_tbl + ' as ['+rn_txt+'] ON ' 
+		+ REPLACE(REPLACE(join_script,'###',rn_txt),'$$$',rn_txt + '_' + convert(varchar(max),row_number() over(order by dependant_tbl))) + ' ' 
+		+ script_tail),
 		tbl_path + dependant_tbl + '|'
 	from delete_order do
 	join x_foreign_joins_formatted on tbl= base_tbl
