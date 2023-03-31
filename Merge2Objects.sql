@@ -24,23 +24,24 @@ as
 	join sys.tables parent_table on parent_table.object_id = fkc.parent_object_id
 	where convert(varchar(max),child_table.name) = @MergeTable
 )
+,unique_columns(unique_table, unique_column)
+as
+(
+	select 
+		fk.dependant_tbl, fk.dependant_column
+	from x_foreign_keys fk
+		join information_schema.table_constraints cns on cns.TABLE_NAME = fk.dependant_tbl
+		inner join information_schema.constraint_column_usage CC on cns.Constraint_Name = CC.Constraint_Name and CC.COLUMN_NAME = fk.dependant_column
+	where CONSTRAINT_TYPE = 'Unique'	
+)
 ,x_foreign_joins(base_tbl, dependant_tbl, join_script, dependant_column)
 as
 (
 	select 
 		base_tbl,
 		dependant_tbl,
-		(select 
-			' or ' + base_column + '=' + dependant_column 
-		from 
-			x_foreign_keys y 
-		where 
-			x.base_column_id = y.base_column_id 
-			and x.base_tbl_id = y.base_tbl_id 
-			and x.dependant_tbl_id = y.dependant_tbl_id 
-		for xml path('')
-		) 
-		,dependant_column
+		base_column + '=' + dependant_column,
+		dependant_column
 	from x_foreign_keys x
 		group by 
 		base_tbl,
@@ -51,16 +52,6 @@ as
 		dependant_tbl_id,
 		dependant_column
 )
-,x_foreign_joins_formatted(base_tbl, dependant_tbl, join_script, dependant_column)
-as
-(
-	select
-		base_tbl, 
-		dependant_tbl, 
-		RIGHT(join_script, LEN(join_script)-4),
-		dependant_column
-	from x_foreign_joins
-)
 ,update_scripts(dependant_tbl, script)
 as
 (
@@ -68,6 +59,23 @@ as
 	'UPDATE ' + dependant_tbl + ' SET ' + dependant_column + ' = ' + @value_remaining 
 		+ ' FROM ' + base_tbl + ' join ' + dependant_tbl + ' on ' + join_script
 		+ ' WHERE ' + @condition_merge
-	from x_foreign_joins_formatted
+	from x_foreign_joins f
+	where not exists(select top 1 1 from unique_columns u where u.unique_table = f.dependant_tbl and unique_column = dependant_column)
+)
+,updateWithChecks_scripts(dependant_tbl, script)
+as
+(
+	select dependant_tbl,
+	'UPDATE ' + dependant_tbl + ' SET ' + dependant_column + ' = ' + @value_remaining 
+		+ ' FROM ' + base_tbl + ' join ' + dependant_tbl + ' on ' + join_script
+		+ ' WHERE ' + @condition_merge
+		+ ' AND not exists (select top 1 1 from ' + dependant_tbl + ' where ' + dependant_column + ' = ' + @value_remaining + '); '
+		+ 'DELETE ' + dependant_tbl 
+		+ ' FROM ' + base_tbl + ' join ' + dependant_tbl + ' on ' + join_script
+		+ ' WHERE ' + @condition_merge
+	from x_foreign_joins f
+	join unique_columns u on u.unique_table = f.dependant_tbl and unique_column = dependant_column
 )
 select * from update_scripts
+union all
+select * from updateWithChecks_scripts
